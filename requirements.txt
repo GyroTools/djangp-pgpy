@@ -1,0 +1,9 @@
+
+django == 2.2.5
+pgpy==0.5.2
+
+pytest==4.6.4
+pytest-django==3.5.1
+
+#rope
+#flake8
