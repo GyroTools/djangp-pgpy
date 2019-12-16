@@ -1,5 +1,5 @@
 
-django == 2.2.8
+django == 3.0
 pgpy==0.5.2
 
 pytest==4.6.4
