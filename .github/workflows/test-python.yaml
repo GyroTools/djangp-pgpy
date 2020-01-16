@@ -27,4 +27,4 @@ jobs:
     - name: Test with pytest
       run: |
         pip install pytest
-        pytest --ds=test_app.settings tests
+        PYTHONPATH=${PYTHONPATH}:$(pwd):$(pwd)/tests pytest --ds=test_app.settings tests
