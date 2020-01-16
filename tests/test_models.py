@@ -133,6 +133,32 @@ class TestUserIdentity:
             with uid_user.private_key.unlock(secret):
                 assert uid_user.private_key.is_unlocked
 
+    def test_add_restorers(self, user_identity_test_data):
+        test_data = user_identity_test_data
+
+        uid_admin = test_data.uid_1
+        uid_user = test_data.uid_2
+        new_user =  test_data.uid_4
+
+
+        uid_user = Identity.objects.get(id=uid_user.id)
+        assert new_user not in uid_user.encrypters.all()
+
+        uid_user.add_restorers(test_data.pwd_user_2, [new_user])
+        assert new_user in uid_user.encrypters.all()
+        assert uid_admin in uid_user.encrypters.all()
+
+        with new_user.unlock(test_data.pwd_user_4):
+            secret = uid_user.get_secret(new_user)
+
+            with uid_user.private_key.unlock(secret):
+                assert uid_user.private_key.is_unlocked
+
+        with uid_admin.unlock(test_data.pwd_user_1):
+            secret = uid_user.get_secret(uid_admin)
+
+            with uid_user.private_key.unlock(secret):
+                assert uid_user.private_key.is_unlocked
 
 class TestEncryptedMessage:
 

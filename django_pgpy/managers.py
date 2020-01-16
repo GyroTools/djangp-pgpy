@@ -27,7 +27,7 @@ class UserIdentityManager(models.Manager):
         return instance
 
     def exists_for_user(self, user):
-        return user.pgp_identity is not None
+        return self.filter(user=user).exists()
 
 
 class EncryptedMessageManager(models.Manager):

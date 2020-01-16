@@ -10,13 +10,17 @@ class UserTestData:
     def __init__(self):
         self.pwd_user_1 = 'pwd_user_1'
         self.pwd_user_2 = 'pwd_user_2'
+        self.pwd_user_4 = 'pwd_user_4'
         self.user_1 = User.objects.create(username='user1')
         self.user_2 = User.objects.create(username='user2')
+        self.user_4 = User.objects.create(username='user4')
 
         self.user_1.set_password(self.pwd_user_1)
         self.user_1.save()
         self.user_2.set_password(self.pwd_user_2)
         self.user_2.save()
+        self.user_4.set_password(self.pwd_user_4)
+        self.user_4.save()
 
 
 class UnprotectedIdentityTestData:
@@ -36,6 +40,7 @@ class UserIdentityTestData(UserTestData):
 
         self.uid_1 = Identity.objects.create(self.user_1, self.pwd_user_1)
         self.uid_2 = Identity.objects.create(self.user_2, self.pwd_user_2, [self.uid_1])
+        self.uid_4 = Identity.objects.create(self.user_4, self.pwd_user_4)
 
 
 class EncryptedMessageTestData(UserIdentityTestData):

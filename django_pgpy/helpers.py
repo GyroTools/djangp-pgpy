@@ -3,14 +3,18 @@ from typing import List
 import pgpy
 from django.contrib.auth.hashers import PBKDF2PasswordHasher
 from django.contrib.auth.models import AbstractUser
+from django.db.models import QuerySet
 from pgpy import PGPKey, PGPMessage
 from pgpy.constants import SymmetricKeyAlgorithm, HashAlgorithm, PubKeyAlgorithm
+from pgpy.errors import PGPError
+from typing import List, Union
 
 from django_pgpy import settings
 
 
 def create_identity(name, email, password=None, restorer_public_keys: List[PGPKey] = []):
     key = create_key_pair(name, email)
+    restorer_public_keys.append(key.pubkey)
     secret_blob = None
     hash_info = None
 
@@ -70,3 +74,24 @@ def encrypt(text: str, public_keys: List[PGPKey]):
 
     del sessionkey
     return msg
+
+
+def add_encrypters(text, uid, password, encrypters):
+    message = PGPMessage.from_blob(text)
+
+    if not message.is_encrypted:
+        raise PGPError("This message is not encrypted")
+
+    if uid.private_key.fingerprint.keyid not in message.encrypters:
+        raise PGPError("Cannot decrypt the provided message with this key")
+
+    pkesk = next(pk for pk in message._sessionkeys if pk.pkalg == uid.private_key.key_algorithm and pk.encrypter == uid.private_key.fingerprint.keyid)
+    with uid.unlock(password):
+        cipher, sessionkey = pkesk.decrypt_sk(uid.private_key._key)
+
+    for encrypter in encrypters:
+        message = encrypter.public_key.encrypt(message, cipher=cipher, sessionkey=sessionkey)
+
+    del sessionkey
+
+    return message

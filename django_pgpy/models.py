@@ -12,7 +12,7 @@ from django.utils.functional import cached_property
 from pgpy import PGPKey, PGPMessage
 from pgpy.errors import PGPError
 
-from django_pgpy.helpers import hash_password, encrypt_private_key_by_password, create_session_key, encrypt
+from django_pgpy.helpers import hash_password, encrypt_private_key_by_password, create_session_key, encrypt, add_encrypters
 from django_pgpy.managers import EncryptedMessageManager, UserIdentityManager
 
 
@@ -64,6 +64,8 @@ class Identity(models.Model):
         for r in self.encrypters.all():
             msg = r.public_key.encrypt(msg, cipher=cipher, sessionkey=sessionkey)
 
+        msg = self.public_key.encrypt(msg, cipher=cipher, sessionkey=sessionkey)
+
         del sessionkey
         self.secret_blob = str(msg)
 
@@ -102,6 +104,14 @@ class Identity(models.Model):
 
         new_secret_blob = encrypt(new_secret, public_keys)
         return RequestKeyRecovery.objects.create(uid=self, secret_blob=str(new_secret_blob), hash_info=hash_info)
+
+    def add_restorers(self, password, encrypters: Union[QuerySet, List[Identity]]):
+        message = add_encrypters(self.secret_blob, self, password, encrypters)
+
+        self.secret_blob = str(message)
+        for e in encrypters:
+            self.encrypters.add(e)
+        self.save()
 
 
 class EncryptedMessageBase(models.Model):
@@ -149,23 +159,7 @@ class EncryptedMessageBase(models.Model):
         return uid.private_key.decrypt(pgp_msg).message
 
     def add_encrypters(self, uid, password, encrypters: Union[QuerySet, List[Identity]]):
-        message = PGPMessage.from_blob(self.text)
-
-        if not message.is_encrypted:
-            raise PGPError("This message is not encrypted")
-
-        if uid.private_key.fingerprint.keyid not in message.encrypters:
-            raise PGPError("Cannot decrypt the provided message with this key")
-
-        pkesk = next(pk for pk in message._sessionkeys if pk.pkalg == uid.private_key.key_algorithm and pk.encrypter == uid.private_key.fingerprint.keyid)
-        with uid.unlock(password):
-            cipher, sessionkey = pkesk.decrypt_sk(uid.private_key._key)
-
-        for encrypter in encrypters:
-            message = encrypter.public_key.encrypt(message, cipher=cipher, sessionkey=sessionkey)
-
-        del sessionkey
-
+        message = add_encrypters(self.text, uid, password, encrypters)
         self.text = str(message)
         self.save()
 
