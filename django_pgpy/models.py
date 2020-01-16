@@ -35,8 +35,8 @@ class Identity(models.Model):
 
     encrypters = models.ManyToManyField(
         'self',
-        help_text='The user doing the impersonating.',
-        related_name='encrypted_keys',
+        related_name='restorable_identities',
+        symmetrical=False,
     )
 
     public_key_blob = models.TextField()
