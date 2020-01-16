@@ -1,6 +1,5 @@
 from __future__ import unicode_literals, annotations
 
-import warnings
 from contextlib import nullcontext
 from typing import List, Union
 

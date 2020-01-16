@@ -138,8 +138,7 @@ class TestUserIdentity:
 
         uid_admin = test_data.uid_1
         uid_user = test_data.uid_2
-        new_user =  test_data.uid_4
-
+        new_user = test_data.uid_4
 
         uid_user = Identity.objects.get(id=uid_user.id)
         assert new_user not in uid_user.encrypters.all()
@@ -159,6 +158,7 @@ class TestUserIdentity:
 
             with uid_user.private_key.unlock(secret):
                 assert uid_user.private_key.is_unlocked
+
 
 class TestEncryptedMessage:
 
