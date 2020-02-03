@@ -135,12 +135,11 @@ class TestUserIdentity:
         uid_1.set_secret('test')
         assert 'nonce' in uid_1.secret_blob
         assert 'keys' in uid_1.secret_blob
-        assert len(json.loads(uid_1.secret_blob)['keys']) == 1
+        assert len(uid_1.secret_blob['keys']) == 1
 
     def test_get_secret(self, user_identity_test_data):
         test_data = user_identity_test_data
 
-        # TODO: test won't fail!'
         fail = True # hack
         with test_data.uid_1.unlock(test_data.pwd_user_1):
             secret = test_data.uid_2.get_secret(test_data.uid_1)
@@ -271,7 +270,7 @@ class TestEncryptedMessage:
 
         encrypters = [test_data.uid_1]
         enc_msg = EncryptedMessage.objects.create('1234567890', encrypters)
-        encoded = json.loads(enc_msg.text)
+        encoded = enc_msg.text
         assert 'nonce' in encoded
         assert 'keys' in encoded
         assert 'ciphertext' in encoded
@@ -296,7 +295,7 @@ class TestEncryptedMessage:
         enc_msg = EncryptedMessage()
         enc_msg.encrypt('1234567890', encrypters)
 
-        encoded = json.loads(enc_msg.text)
+        encoded = enc_msg.text
         assert 'nonce' in encoded
         assert 'keys' in encoded
         assert 'ciphertext' in encoded

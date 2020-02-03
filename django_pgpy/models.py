@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from typing import List, Union
 
 from django.contrib.auth import get_user_model
+from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db.models import CASCADE, QuerySet
 from django.utils import timezone
@@ -18,7 +19,7 @@ from django_pgpy.managers import EncryptedMessageManager, UserIdentityManager
 def get_secret(decrypter_uid: Identity, secret_blob: str) -> str:
     assert decrypter_uid.private_key.is_unlocked
 
-    encrypted_message = json.loads(secret_blob)
+    encrypted_message = secret_blob
     msg = decrypt(encrypted_message, decrypter_uid.private_key)
     return msg
 
@@ -40,7 +41,7 @@ class Identity(models.Model):
 
     public_key_blob = models.TextField()
     private_key_blob = models.TextField()
-    secret_blob = models.TextField(null=True, blank=True)
+    secret_blob = JSONField(blank=True, null=True)
     hash_info = models.CharField(max_length=256, null=True, blank=True)
 
     @cached_property
@@ -59,7 +60,7 @@ class Identity(models.Model):
         encrypters.append(self)
         public_keys = [x.public_key for x in encrypters]
         result = encrypt(secret, public_keys)
-        self.secret_blob = json.dumps(result)
+        self.secret_blob = result
 
     @property
     def can_decrypt(self):
@@ -97,13 +98,13 @@ class Identity(models.Model):
         public_keys = [e.public_key for e in self.encrypters.all()]
 
         new_secret_blob = encrypt(new_secret, public_keys)
-        return RequestKeyRecovery.objects.create(uid=self, secret_blob=json.dumps(new_secret_blob), hash_info=hash_info)
+        return RequestKeyRecovery.objects.create(uid=self, secret_blob=new_secret_blob, hash_info=hash_info)
 
     def add_restorers(self, password, encrypters: Union[QuerySet, List[Identity]]):
         encrypter_public_keys = [e.public_key for e in encrypters]
         with self.unlock(password):
-            message = add_encrypters(json.loads(self.secret_blob), self.private_key, encrypter_public_keys)
-            self.secret_blob = json.dumps(message)
+            message = add_encrypters(self.secret_blob, self.private_key, encrypter_public_keys)
+            self.secret_blob = message
 
             for e in encrypters:
                 self.encrypters.add(e)
@@ -116,7 +117,7 @@ class EncryptedMessageBase(models.Model):
 
     objects = EncryptedMessageManager()
 
-    text = models.TextField()
+    text = JSONField(blank=True, null=True)
 
     encrypters = models.ManyToManyField(
         Identity,
@@ -126,7 +127,7 @@ class EncryptedMessageBase(models.Model):
 
     @property
     def encrypted_text(self):
-        return json.loads(self.text)
+        return self.text
 
     def can_decrypt(self, uid: Identity):
         return uid.id in [e.id for e in self.encrypters.all()]
@@ -135,7 +136,7 @@ class EncryptedMessageBase(models.Model):
         public_keys = [e.public_key for e in encrypters]
         encrypted = encrypt(text, public_keys)
 
-        self.text = json.dumps(encrypted)
+        self.text = encrypted
         self.save()
 
         for e in encrypters:
@@ -156,7 +157,7 @@ class EncryptedMessageBase(models.Model):
         encrypter_public_keys = [e.public_key for e in encrypters]
         with uid.unlock(password):
             message = add_encrypters(self.encrypted_text, uid.private_key, encrypter_public_keys)
-            self.text = json.dumps(message)
+            self.text = message
 
             for e in encrypters:
                 self.encrypters.add(e)
@@ -171,7 +172,7 @@ class EncryptedMessageBase(models.Model):
         pub_blobs_to_remove = [e.public_key_blob for e in encrypters]
         new_encrypter_public_keys = [pk for pk in encrypter_public_keys if pk not in pub_blobs_to_remove]
         encrypted['keys'] = new_encrypter_public_keys
-        self.text = json.dumps(encrypted)
+        self.text = encrypted
         self.save()
 
         for e in encrypters:
@@ -191,7 +192,7 @@ class RequestKeyRecovery(models.Model):
                                  blank=True,
                                  related_name='password_reset_requests')
 
-    secret_blob = models.TextField(null=True, blank=True)
+    secret_blob = JSONField(null=True, blank=True)
     hash_info = models.CharField(max_length=64, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

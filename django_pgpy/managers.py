@@ -20,7 +20,7 @@ class UserIdentityManager(models.Manager):
         instance = super().create(user=user,
                                   public_key_blob=key.public_key_blob,
                                   private_key_blob=key.private_key_blob,
-                                  secret_blob=json.dumps(secret_blob) if secret_blob else None,
+                                  secret_blob=secret_blob,
                                   hash_info=hash_info)
 
         for r in restorers:

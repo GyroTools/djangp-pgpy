@@ -22,17 +22,6 @@ class UserTestData:
         self.user_4.set_password(self.pwd_user_4)
         self.user_4.save()
 
-
-class UnprotectedIdentityTestData:
-
-    def __init__(self):
-        self.uid_1 = Identity.objects.create(user=None,
-                                             public_key_blob=str(key.pubkey),
-                                             private_key_blob=str(private_key),
-                                             secret_blob=str(secret_blob),
-                                             hash_info=hash_info)
-
-
 class UserIdentityTestData(UserTestData):
 
     def __init__(self):
