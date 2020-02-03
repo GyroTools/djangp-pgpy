@@ -1,9 +1,10 @@
 
 django == 2.2.8
-pgpy==0.5.2
+pycryptodome==3.9.4
 
 pytest==4.6.4
 pytest-django==3.5.1
+
 
 #rope
 #flake8

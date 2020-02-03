@@ -1,6 +1,8 @@
+import json
+
 from django.db import models
 
-from django_pgpy.helpers import create_identity
+from django_pgpy.helpers import create_identity, RSAKey
 from django_pgpy import settings
 
 
@@ -16,9 +18,9 @@ class UserIdentityManager(models.Manager):
                                                       public_keys)
 
         instance = super().create(user=user,
-                                  public_key_blob=str(key.pubkey),
-                                  private_key_blob=str(key),
-                                  secret_blob=str(secret_blob) if secret_blob else None,
+                                  public_key_blob=key.public_key_blob,
+                                  private_key_blob=key.private_key_blob,
+                                  secret_blob=json.dumps(secret_blob) if secret_blob else None,
                                   hash_info=hash_info)
 
         for r in restorers:

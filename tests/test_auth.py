@@ -91,7 +91,7 @@ class TestModelUserWithIdentityBackend:
         assert Identity.objects.exists_for_user(test_data.user_2)
         assert Identity.objects.get(user=test_data.user_2).encrypters.count() == 1
         assert Identity.objects.get(user=test_data.user_1) in Identity.objects.get(user=test_data.user_2).encrypters.all()
-        keyid2 = Identity.objects.get(user=test_data.user_2).private_key.fingerprint.keyid
+        private_key = Identity.objects.get(user=test_data.user_2).private_key.private_key_blob
 
         test_data.user_4.is_superuser = True
         test_data.user_4.save()
@@ -103,7 +103,7 @@ class TestModelUserWithIdentityBackend:
             user=test_data.user_2).encrypters.all()
         assert Identity.objects.get(user=test_data.user_4) in Identity.objects.get(
             user=test_data.user_2).encrypters.all()
-        assert keyid2 == Identity.objects.get(user=test_data.user_2).private_key.fingerprint.keyid
+        assert private_key == Identity.objects.get(user=test_data.user_2).private_key.private_key_blob
 
         uid: Identity = test_data.user_1.pgp_identity
         assert uid.private_key.is_protected
@@ -119,12 +119,12 @@ class TestModelUserWithIdentityBackend:
 
         assert Identity.objects.exists_for_user(test_data.user_1)
         assert Identity.objects.filter(user=test_data.user_1).count() == 1
-        keyid = Identity.objects.get(user=test_data.user_1).private_key.fingerprint.keyid
+        keyid = Identity.objects.get(user=test_data.user_1).private_key.private_key_blob
         backend.authenticate(request, username=test_data.user_1.username, password=test_data.pwd_user_1)
 
         assert Identity.objects.exists_for_user(test_data.user_1)
         assert Identity.objects.filter(user=test_data.user_1).count() == 1
-        assert keyid == Identity.objects.get(user=test_data.user_1).private_key.fingerprint.keyid
+        assert keyid == Identity.objects.get(user=test_data.user_1).private_key.private_key_blob
 
         uid: Identity = test_data.user_1.pgp_identity
         assert uid.private_key.is_protected

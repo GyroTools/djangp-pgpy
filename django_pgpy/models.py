@@ -1,27 +1,29 @@
 from __future__ import unicode_literals, annotations
 
+import json
 import warnings
 from contextlib import nullcontext
 from typing import List, Union
 
+from Crypto.PublicKey import RSA
 from django.contrib.auth import get_user_model
+from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db.models import CASCADE, QuerySet
 from django.utils import timezone
 from django.utils.functional import cached_property
-from pgpy import PGPKey, PGPMessage
-from pgpy.errors import PGPError
 
-from django_pgpy.helpers import hash_password, encrypt_private_key_by_password, create_session_key, encrypt, add_encrypters
+from django_pgpy.helpers import hash_password, create_session_key, encrypt, \
+    add_encrypters, RSAKey, decrypt
 from django_pgpy.managers import EncryptedMessageManager, UserIdentityManager
 
 
 def get_secret(decrypter_uid: Identity, secret_blob: str) -> str:
     assert decrypter_uid.private_key.is_unlocked
 
-    encrypted_message = PGPMessage.from_blob(secret_blob)
-    msg = decrypter_uid.private_key.decrypt(encrypted_message)
-    return msg.message
+    encrypted_message = json.loads(secret_blob)
+    msg = decrypt(encrypted_message, decrypter_uid.private_key)
+    return msg
 
 
 class Identity(models.Model):
@@ -45,29 +47,22 @@ class Identity(models.Model):
     hash_info = models.CharField(max_length=256, null=True, blank=True)
 
     @cached_property
-    def public_key(self) -> PGPKey:
-        key, _ = PGPKey.from_blob(self.public_key_blob)
-        return key.pubkey
+    def public_key(self) -> RSAKey:
+        return RSAKey(self.public_key_blob)
 
     @cached_property
-    def private_key(self) -> PGPKey:
-        key, _ = PGPKey.from_blob(self.private_key_blob)
-        return key
+    def private_key(self) -> RSAKey:
+        return RSAKey(self.private_key_blob)
 
     def get_secret(self, decrypter_uid: Identity) -> str:
         return get_secret(decrypter_uid, self.secret_blob)
 
     def set_secret(self, secret):
-        cipher, sessionkey = create_session_key()
-
-        msg = PGPMessage.new(secret)
-        for r in self.encrypters.all():
-            msg = r.public_key.encrypt(msg, cipher=cipher, sessionkey=sessionkey)
-
-        msg = self.public_key.encrypt(msg, cipher=cipher, sessionkey=sessionkey)
-
-        del sessionkey
-        self.secret_blob = str(msg)
+        encrypters = list(self.encrypters.all())
+        encrypters.append(self)
+        public_keys = [x.public_key for x in encrypters]
+        result = encrypt(secret, public_keys)
+        self.secret_blob = json.dumps(result)
 
     @property
     def can_decrypt(self):
@@ -75,14 +70,19 @@ class Identity(models.Model):
 
     def protect(self, password):
         self.hash_info, password_hash = hash_password(password)
-        encrypt_private_key_by_password(self.private_key, password_hash)
+        protected_key = self.private_key.protect(password_hash)
+        self.private_key_blob = protected_key.private_key_blob
+        self.save()
         return password_hash
 
     def unlock(self, password):
         _, password_hash = hash_password(password, self.hash_info)
+        priv = self.private_key
+        priv.unlock(password_hash)
+
         return self.private_key.unlock(password_hash)
 
-    def decrypt(self, encrypted_msg, password=None):
+    def decrypt(self, encrypted_msg: EncryptedMessageBase, password=None):
         unlock_gen = self.unlock(password) if password else nullcontext()
 
         with unlock_gen:
@@ -92,8 +92,6 @@ class Identity(models.Model):
 
         with self.unlock(old_password):
             new_password_hash = self.protect(new_password)
-
-            self.private_key_blob = str(self.private_key)
             self.set_secret(new_password_hash)
 
             self.save()
@@ -103,15 +101,17 @@ class Identity(models.Model):
         public_keys = [e.public_key for e in self.encrypters.all()]
 
         new_secret_blob = encrypt(new_secret, public_keys)
-        return RequestKeyRecovery.objects.create(uid=self, secret_blob=str(new_secret_blob), hash_info=hash_info)
+        return RequestKeyRecovery.objects.create(uid=self, secret_blob=json.dumps(new_secret_blob), hash_info=hash_info)
 
     def add_restorers(self, password, encrypters: Union[QuerySet, List[Identity]]):
-        message = add_encrypters(self.secret_blob, self, password, encrypters)
+        encrypter_public_keys = [e.public_key for e in encrypters]
+        with self.unlock(password):
+            message = add_encrypters(json.loads(self.secret_blob), self.private_key, encrypter_public_keys)
+            self.secret_blob = json.dumps(message)
 
-        self.secret_blob = str(message)
-        for e in encrypters:
-            self.encrypters.add(e)
-        self.save()
+            for e in encrypters:
+                self.encrypters.add(e)
+            self.save()
 
 
 class EncryptedMessageBase(models.Model):
@@ -131,50 +131,52 @@ class EncryptedMessageBase(models.Model):
 
     @property
     def encrypted_text(self):
-        return PGPMessage.from_blob(self.text)
+        return json.loads(self.text)
 
     def can_decrypt(self, uid: Identity):
         return uid.id in [e.id for e in self.encrypters.all()]
 
     def encrypt(self, text, encrypters: Union[QuerySet, List[Identity]]):
         public_keys = [e.public_key for e in encrypters]
-        pgp_msg = encrypt(text, public_keys)
+        encrypted = encrypt(text, public_keys)
 
-        self.text = str(pgp_msg)
+        self.text = json.dumps(encrypted)
         self.save()
 
         for e in encrypters:
             self.encrypters.add(e)
 
-        return pgp_msg
+        return encrypted
 
     def decrypt(self, uid: Identity) -> str:
         if not uid.private_key.is_unlocked:
-            raise PGPError('Cannot decrypt with a protected key')
+            raise ValueError('Cannot decrypt with a protected key')
 
         if not self.can_decrypt(uid):
-            raise PGPError('This UID is not in the list of encrypters')
+            raise ValueError('This UID is not in the list of encrypters')
 
-        pgp_msg = PGPMessage.from_blob(self.text)
-        return uid.private_key.decrypt(pgp_msg).message
+        return decrypt(self.encrypted_text, uid.private_key)
 
     def add_encrypters(self, uid, password, encrypters: Union[QuerySet, List[Identity]]):
-        message = add_encrypters(self.text, uid, password, encrypters)
-        self.text = str(message)
-        self.save()
+        encrypter_public_keys = [e.public_key for e in encrypters]
+        with uid.unlock(password):
+            message = add_encrypters(self.encrypted_text, uid.private_key, encrypter_public_keys)
+            self.text = json.dumps(message)
 
-        for e in encrypters:
-            self.encrypters.add(e)
+            for e in encrypters:
+                self.encrypters.add(e)
+            self.save()
+            return message
 
-        return message
+        return None
 
     def remove_encrypters(self, encrypters: Union[QuerySet, List[Identity]]):
-        message = PGPMessage.from_blob(self.text)
-
-        fingerprints_to_remove = [e.private_key.fingerprint.keyid for e in encrypters]
-        message._sessionkeys = [pk for pk in message._sessionkeys if pk.encrypter not in fingerprints_to_remove]
-
-        self.text = str(message)
+        encrypted = self.encrypted_text
+        encrypter_public_keys = encrypted['keys']
+        pub_blobs_to_remove = [e.public_key_blob for e in encrypters]
+        new_encrypter_public_keys = [pk for pk in encrypter_public_keys if pk not in pub_blobs_to_remove]
+        encrypted['keys'] = new_encrypter_public_keys
+        self.text = json.dumps(encrypted)
         self.save()
 
         for e in encrypters:
@@ -210,9 +212,9 @@ class RequestKeyRecovery(models.Model):
                 new_secret = self.get_secret(reset_by)
 
                 with self.uid.private_key.unlock(old_secret):
-                    encrypt_private_key_by_password(self.uid.private_key, new_secret)
+                    self.uid.private_key.protect(new_secret)
 
-                self.uid.private_key_blob = str(self.uid.private_key)
+                self.uid.private_key_blob = self.uid.private_key.private_key_blob
                 self.uid.hash_info = self.hash_info
                 self.uid.secret_blob = self.secret_blob
 

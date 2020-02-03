@@ -10,6 +10,7 @@ eggs
 parts
 src/*.egg-info
 my_db
+env/
 
 # Not needed since this is only an app
 manage.py
