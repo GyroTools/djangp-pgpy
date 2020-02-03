@@ -1,19 +1,16 @@
 from __future__ import unicode_literals, annotations
 
 import json
-import warnings
 from contextlib import nullcontext
 from typing import List, Union
 
-from Crypto.PublicKey import RSA
 from django.contrib.auth import get_user_model
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db.models import CASCADE, QuerySet
 from django.utils import timezone
 from django.utils.functional import cached_property
 
-from django_pgpy.helpers import hash_password, create_session_key, encrypt, \
+from django_pgpy.helpers import hash_password, encrypt, \
     add_encrypters, RSAKey, decrypt
 from django_pgpy.managers import EncryptedMessageManager, UserIdentityManager
 
@@ -89,7 +86,6 @@ class Identity(models.Model):
             return encrypted_msg.decrypt(self)
 
     def change_password(self, old_password: str, new_password: str):
-
         with self.unlock(old_password):
             new_password_hash = self.protect(new_password)
             self.set_secret(new_password_hash)
@@ -115,7 +111,6 @@ class Identity(models.Model):
 
 
 class EncryptedMessageBase(models.Model):
-
     class Meta:
         abstract = True
 
@@ -197,7 +192,7 @@ class RequestKeyRecovery(models.Model):
                                  related_name='password_reset_requests')
 
     secret_blob = models.TextField(null=True, blank=True)
-    hash_info = models.CharField(max_length=32, null=True, blank=True)
+    hash_info = models.CharField(max_length=64, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     finished_at = models.DateTimeField(null=True, blank=True)

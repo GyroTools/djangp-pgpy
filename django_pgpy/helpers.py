@@ -159,11 +159,6 @@ def hash_password(password, hash_info=None):
                              iterations=int(iterations)).rsplit('$', 1)
     return hasher.encode(password, hasher.salt()).rsplit('$', 1)
 
-def create_session_key():
-    cipher = pgpy.constants.SymmetricKeyAlgorithm.AES256
-    sessionkey = cipher.gen_key()
-    return cipher, sessionkey
-
 
 def encrypt(text: str, public_keys: List[RSAKey]):
     # create a session key
@@ -207,6 +202,7 @@ def get_session_key(encoded: dict, key: RSAKey):
     session_key = cipher_rsa.decrypt(encrypted_session_key)
 
     return session_key
+
 
 def encrypt_session_key(session_key: bytes, public_key: RsaKey):
     # Encrypt the session key with the public RSA key
