@@ -20,7 +20,7 @@ def add_superusers_to_identity(user, password, superuser_identities):
 
 def process_key_recovery_requests(user, password):
     from django_pgpy.models import RequestKeyRecovery
-    if user.is_superuser and hasattr(user, 'pgp_identity'):
+    if user and user.is_authenticated and user.is_superuser and hasattr(user, 'pgp_identity'):
         open_requests = RequestKeyRecovery.objects.filter(reset_by=None)
         for request in open_requests:
             request.reset_password(user.pgp_identity, password)
