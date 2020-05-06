@@ -1,7 +1,8 @@
 import pytest
 
 from django_pgpy.auth import ModelUserWithIdentityBackend, ModelUserWithIdentityAndSuperuserRestorersBackend
-from django_pgpy.models import Identity
+from django_pgpy.models import Identity, RequestKeyRecovery
+
 
 @pytest.mark.django_db
 class TestModelUserWithIdentityBackend:
@@ -131,3 +132,30 @@ class TestModelUserWithIdentityBackend:
 
         with uid.unlock(test_data.pwd_user_1):
             assert uid.private_key.is_unlocked
+
+    def test_process_key_recovery_requests(self, rf, user_identity_test_data):
+        test_data = user_identity_test_data
+        request = rf.get('/login')
+
+        backend = ModelUserWithIdentityAndSuperuserRestorersBackend()
+
+        test_data.user_4.is_superuser = True
+        test_data.user_4.save()
+        backend.authenticate(request, username=test_data.user_1.username, password=test_data.pwd_user_1)
+        backend.authenticate(request, username=test_data.user_2.username, password=test_data.pwd_user_2)
+
+        assert Identity.objects.exists_for_user(test_data.user_1)
+        assert Identity.objects.filter(user=test_data.user_1).count() == 1
+        test_data.user_1.pgp_identity.reset_password('new_password')
+        assert RequestKeyRecovery.objects.count() == 1
+        assert RequestKeyRecovery.objects.filter(reset_by=None).count() == 1
+
+        backend.authenticate(request, username=test_data.user_2.username, password=test_data.pwd_user_2)
+
+        assert RequestKeyRecovery.objects.count() == 1
+        assert RequestKeyRecovery.objects.filter(reset_by=None).count() == 1
+
+        backend.authenticate(request, username=test_data.user_4.username, password=test_data.pwd_user_4)
+        assert RequestKeyRecovery.objects.count() == 1
+        assert RequestKeyRecovery.objects.filter(reset_by=None).count() == 0
+        assert RequestKeyRecovery.objects.first().reset_by == test_data.uid_4

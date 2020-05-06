@@ -18,6 +18,14 @@ def add_superusers_to_identity(user, password, superuser_identities):
             identity.add_restorers(password, list(superuser_identities.all().order_by('user__id')))
 
 
+def process_key_recovery_requests(user, password):
+    from django_pgpy.models import RequestKeyRecovery
+    if user.is_superuser and hasattr(user, 'pgp_identity'):
+        open_requests = RequestKeyRecovery.objects.filter(reset_by=None)
+        for request in open_requests:
+            request.reset_password(user.pgp_identity, password)
+
+
 class ModelUserWithIdentityBackend(ModelBackend):
 
     def authenticate(self, request, username=None, password=None, **kwargs):
@@ -41,6 +49,7 @@ class ModelUserWithIdentityAndSuperuserRestorersBackend(ModelBackend):
 
         create_identity(user, password, superuser_identities)
         add_superusers_to_identity(user, password, superuser_identities)
+        process_key_recovery_requests(user, password)
 
         return user
 
@@ -55,3 +64,4 @@ class IdentityLoginAction:
 
             create_identity(user, password, superuser_identities)
             add_superusers_to_identity(user, password, superuser_identities)
+            process_key_recovery_requests(user, password)
