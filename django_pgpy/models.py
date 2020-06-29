@@ -1,6 +1,5 @@
 from __future__ import unicode_literals, annotations
 
-import json
 from contextlib import nullcontext
 from typing import List, Union
 
@@ -14,6 +13,7 @@ from django.utils.functional import cached_property
 from django_pgpy.helpers import hash_password, encrypt, \
     add_encrypters, RSAKey, decrypt
 from django_pgpy.managers import EncryptedMessageManager, UserIdentityManager
+from exceptions import NoEncrypterFound
 
 
 def get_secret(decrypter_uid: Identity, secret_blob: str) -> str:
@@ -216,6 +216,8 @@ class RequestKeyRecovery(models.Model):
 
                 self.uid.save()
                 self.finished(reset_by)
+            else:
+                raise NoEncrypterFound(reset_by, self.uid)
 
     def finished(self, uid):
         self.reset_by = uid

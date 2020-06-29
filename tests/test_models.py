@@ -5,6 +5,7 @@ from Crypto.PublicKey import RSA
 
 from django_pgpy.helpers import hash_password, RSAKey
 from django_pgpy.models import Identity
+from exceptions import NoEncrypterFound
 from test_app.models import EncryptedMessage
 
 
@@ -235,6 +236,24 @@ class TestUserIdentity:
 
             with uid_user.private_key.unlock(secret):
                 assert uid_user.private_key.is_unlocked
+
+    def test_password_reset__with_unkown_encrypter(self, user_identity_test_data):
+        test_data = user_identity_test_data
+
+        new_password = '1234567890'
+        uid_admin = test_data.uid_4
+        uid_user = test_data.uid_2
+
+        with uid_user.unlock(test_data.pwd_user_2):
+            assert uid_user.private_key.is_unlocked
+
+        reset_request = uid_user.reset_password(new_password)
+
+        uid_user = Identity.objects.get(id=uid_user.id)
+        assert uid_user.can_decrypt is False
+
+        with pytest.raises(NoEncrypterFound):
+            reset_request.reset_password(uid_admin, test_data.pwd_user_4)
 
     def test_add_restorers(self, user_identity_test_data):
         test_data = user_identity_test_data
