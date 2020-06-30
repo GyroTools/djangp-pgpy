@@ -5,7 +5,7 @@ from Crypto.PublicKey import RSA
 
 from django_pgpy.helpers import hash_password, RSAKey
 from django_pgpy.models import Identity
-from exceptions import NoEncrypterFound
+from django_pgpy.exceptions import NoEncrypterFound
 from test_app.models import EncryptedMessage
 
 

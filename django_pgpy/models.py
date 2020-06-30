@@ -13,7 +13,7 @@ from django.utils.functional import cached_property
 from django_pgpy.helpers import hash_password, encrypt, \
     add_encrypters, RSAKey, decrypt
 from django_pgpy.managers import EncryptedMessageManager, UserIdentityManager
-from exceptions import NoEncrypterFound
+from django_pgpy.exceptions import NoEncrypterFound
 
 
 def get_secret(decrypter_uid: Identity, secret_blob: str) -> str:
