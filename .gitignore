@@ -24,3 +24,5 @@ manage.py
 .tox
 .eggs
 
+.idea
+django_pgpy.egg-info
