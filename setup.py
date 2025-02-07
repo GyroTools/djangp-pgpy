@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='django-pgpy',
-      version='0.1.7',
+      version='0.2.1',
       description='OpenPGP encryption for django.',
       author='Felix Eichenberger',
       author_email='felix.eichenberger@gyrotools.com',
