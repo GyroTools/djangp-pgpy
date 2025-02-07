@@ -4,7 +4,7 @@ from contextlib import nullcontext
 from typing import List, Union
 
 from django.contrib.auth import get_user_model
-from django.contrib.postgres.fields import JSONField
+from django.db.models import JSONField
 from django.db import models
 from django.db.models import CASCADE, QuerySet
 from django.utils import timezone
